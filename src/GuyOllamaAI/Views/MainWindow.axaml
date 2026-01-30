@@ -5,12 +5,12 @@
         x:Class="GuyOllamaAI.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="GuyOllamaAI"
-        Width="1000" Height="700"
-        MinWidth="800" MinHeight="500"
+        Width="1100" Height="700"
+        MinWidth="900" MinHeight="500"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource BackgroundBrush}">
 
-    <Grid ColumnDefinitions="250, *">
+    <Grid ColumnDefinitions="250, *, Auto">
         <!-- Sidebar -->
         <Border Grid.Column="0"
                 Background="{DynamicResource SurfaceBrush}"
@@ -77,16 +77,22 @@
                 <StackPanel Grid.Row="3" Spacing="8">
                     <Separator />
 
-                    <!-- Connection Status -->
+                    <!-- AI Status -->
                     <Border Background="{DynamicResource CardBrush}"
                             CornerRadius="8"
                             Padding="12,8">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Ellipse Width="8" Height="8"
-                                     Fill="{Binding ConnectionStatusColor}" />
-                            <TextBlock Text="{Binding ConnectionStatus}"
-                                       Classes="caption"
-                                       VerticalAlignment="Center" />
+                        <StackPanel Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Ellipse Width="8" Height="8"
+                                         Fill="{Binding ConnectionStatusColor}" />
+                                <TextBlock Text="{Binding ConnectionStatus}"
+                                           Classes="caption"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding AiStatusText}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       IsVisible="{Binding IsLoading}" />
                         </StackPanel>
                     </Border>
 
@@ -122,6 +128,17 @@
                         <TextBlock Text="{Binding CurrentChatTitle}"
                                    Classes="heading"
                                    VerticalAlignment="Center" />
+                        <!-- Chat Mode Badge -->
+                        <Border Background="{DynamicResource AccentBrush}"
+                                CornerRadius="4"
+                                Padding="8,4"
+                                IsVisible="{Binding IsCodeChat}"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="CODE MODE"
+                                       FontSize="10"
+                                       FontWeight="Bold"
+                                       Foreground="White" />
+                        </Border>
                     </StackPanel>
 
                     <!-- Model Selector -->
@@ -170,7 +187,7 @@
                 </ItemsControl>
             </ScrollViewer>
 
-            <!-- Loading Indicator -->
+            <!-- Loading Indicator with detailed status -->
             <Border Grid.Row="1"
                     IsVisible="{Binding IsLoading}"
                     VerticalAlignment="Bottom"
@@ -179,9 +196,26 @@
                     Background="{DynamicResource CardBrush}"
                     CornerRadius="12"
                     Padding="16,10">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="AI is thinking..."
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <!-- Simple loading animation using opacity -->
+                    <Border Width="8" Height="8"
+                            CornerRadius="4"
+                            Background="{DynamicResource AccentBrush}">
+                        <Border.Styles>
+                            <Style Selector="Border">
+                                <Style.Animations>
+                                    <Animation Duration="0:0:1" IterationCount="Infinite">
+                                        <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                        <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+                                        <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                    </Animation>
+                                </Style.Animations>
+                            </Style>
+                        </Border.Styles>
+                    </Border>
+                    <TextBlock Text="{Binding AiStatusText}"
                                Classes="caption"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
                                VerticalAlignment="Center" />
                 </StackPanel>
             </Border>
@@ -214,8 +248,151 @@
             </Border>
         </Grid>
 
+        <!-- Workspace Panel (Code Chat only) -->
+        <Border Grid.Column="2"
+                Background="{DynamicResource SurfaceBrush}"
+                Width="250"
+                IsVisible="{Binding IsCodeChat}"
+                Padding="12">
+            <Grid RowDefinitions="Auto, Auto, *, Auto">
+                <TextBlock Grid.Row="0"
+                           Text="Workspace"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           Margin="0,0,0,8" />
+
+                <Border Grid.Row="1"
+                        Background="{DynamicResource CardBrush}"
+                        CornerRadius="6"
+                        Padding="8"
+                        Margin="0,0,0,12">
+                    <TextBlock Text="{Binding WorkspacePath}"
+                               FontSize="10"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextWrapping="Wrap" />
+                </Border>
+
+                <!-- File List -->
+                <ScrollViewer Grid.Row="2">
+                    <ItemsControl ItemsSource="{Binding WorkspaceFiles}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{DynamicResource CardBrush}"
+                                        CornerRadius="4"
+                                        Padding="8,6"
+                                        Margin="0,2">
+                                    <Grid ColumnDefinitions="*, Auto">
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding Name}"
+                                                   FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding SizeDisplay}"
+                                                   FontSize="10"
+                                                   Margin="8,0,0,0"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- Workspace Actions -->
+                <StackPanel Grid.Row="3" Spacing="8" Margin="0,12,0,0">
+                    <Button Classes="secondary"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding RefreshWorkspaceFilesCommand}">
+                        <TextBlock Text="Refresh Files" FontSize="12" />
+                    </Button>
+                    <Button Classes="secondary"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding OpenWorkspaceFolderCommand}">
+                        <TextBlock Text="Open Folder" FontSize="12" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- New Chat Dialog Overlay -->
+        <Border Grid.ColumnSpan="3"
+                IsVisible="{Binding IsNewChatDialogVisible}"
+                Background="#80000000">
+            <Border Background="{DynamicResource SurfaceBrush}"
+                    CornerRadius="16"
+                    Padding="32"
+                    MaxWidth="400"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <StackPanel Spacing="20">
+                    <Grid ColumnDefinitions="*, Auto">
+                        <TextBlock Text="New Chat"
+                                   Classes="title" />
+                        <Button Grid.Column="1"
+                                Classes="icon"
+                                Command="{Binding CloseNewChatDialogCommand}">
+                            <TextBlock Text="X" FontSize="16" FontWeight="Bold" />
+                        </Button>
+                    </Grid>
+
+                    <TextBlock Text="Choose the type of chat you want to start:"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextWrapping="Wrap" />
+
+                    <StackPanel Spacing="12">
+                        <!-- Regular Chat Option -->
+                        <Button Classes="secondary"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left"
+                                Padding="16"
+                                Command="{Binding NewRegularChatCommand}">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Regular Chat"
+                                           FontWeight="SemiBold"
+                                           FontSize="14"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                                <TextBlock Text="Have a normal conversation with the AI"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Code Chat Option -->
+                        <Button Classes="secondary"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left"
+                                Padding="16"
+                                Command="{Binding NewCodeChatCommand}">
+                            <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Code Chat"
+                                               FontWeight="SemiBold"
+                                               FontSize="14"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <Border Background="{DynamicResource AccentBrush}"
+                                            CornerRadius="4"
+                                            Padding="6,2">
+                                        <TextBlock Text="NEW"
+                                                   FontSize="9"
+                                                   FontWeight="Bold"
+                                                   Foreground="White" />
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="AI can execute commands and manage files in a dedicated workspace folder"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
         <!-- Info Overlay -->
-        <Border Grid.ColumnSpan="2"
+        <Border Grid.ColumnSpan="3"
                 IsVisible="{Binding IsInfoVisible}"
                 Background="#80000000">
             <Border Background="{DynamicResource SurfaceBrush}"
@@ -327,7 +504,7 @@
         </Border>
 
         <!-- Settings Overlay -->
-        <Border Grid.ColumnSpan="2"
+        <Border Grid.ColumnSpan="3"
                 IsVisible="{Binding IsSettingsVisible}"
                 Background="#80000000">
             <Border Background="{DynamicResource SurfaceBrush}"
