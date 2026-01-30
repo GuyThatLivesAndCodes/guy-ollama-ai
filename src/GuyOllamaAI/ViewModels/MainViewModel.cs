@@ -21,6 +21,8 @@ public partial class MainViewModel : ViewModelBase
     private readonly FileOperationService _fileService = new();
     private readonly CommandExecutionService _commandService = new();
     private readonly CodeActionParser _actionParser = new();
+    private readonly ChatPersistenceService _persistenceService = new();
+    private bool _isInitialized;
 
     [ObservableProperty]
     private ObservableCollection<ChatMessage> _messages = new();
@@ -93,11 +95,19 @@ public partial class MainViewModel : ViewModelBase
 
     private async void InitializeAsync()
     {
+        // Load saved settings first
+        await LoadSettingsAsync();
+
         SetStatus(AIStatus.Connecting);
         await CheckConnectionAsync();
         SetStatus(AIStatus.LoadingModels);
         await RefreshModelsAsync();
+
+        // Load saved sessions
+        await LoadSessionsAsync();
+
         SetStatus(AIStatus.Idle);
+        _isInitialized = true;
     }
 
     private void SetStatus(AIStatus status)
@@ -197,23 +207,47 @@ public partial class MainViewModel : ViewModelBase
 
             SetStatus(AIStatus.Generating);
 
-            // Stream the response
+            // Stream the response with batched UI updates to prevent freezing
+            var contentBuilder = new System.Text.StringBuilder();
+            var lastUpdateTime = DateTime.UtcNow;
+            const int updateIntervalMs = 50; // Update UI every 50ms max
+
             await foreach (var chunk in App.OllamaService.ChatStreamAsync(
                 SelectedModel,
                 messagesForApi,
                 _currentCancellation.Token))
             {
-                await Dispatcher.UIThread.InvokeAsync(() =>
+                contentBuilder.Append(chunk);
+
+                // Batch updates to reduce UI thread pressure
+                var now = DateTime.UtcNow;
+                if ((now - lastUpdateTime).TotalMilliseconds >= updateIntervalMs)
                 {
-                    assistantMessage.Content += chunk;
-                    // Force UI update
-                    var index = Messages.IndexOf(assistantMessage);
-                    if (index >= 0)
+                    var currentContent = contentBuilder.ToString();
+                    await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        Messages[index] = assistantMessage;
-                    }
-                });
+                        assistantMessage.Content = currentContent;
+                        var index = Messages.IndexOf(assistantMessage);
+                        if (index >= 0)
+                        {
+                            Messages[index] = assistantMessage;
+                        }
+                    });
+                    lastUpdateTime = now;
+                }
             }
+
+            // Final update with complete content
+            var finalContent = contentBuilder.ToString();
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                assistantMessage.Content = finalContent;
+                var index = Messages.IndexOf(assistantMessage);
+                if (index >= 0)
+                {
+                    Messages[index] = assistantMessage;
+                }
+            });
 
             // Process code actions if in code chat mode
             if (_currentSession.Mode == ChatMode.Code && !string.IsNullOrEmpty(_currentSession.WorkspacePath))
@@ -224,6 +258,9 @@ public partial class MainViewModel : ViewModelBase
             // Add final message to session
             _currentSession.Messages.Add(new ChatMessage("Assistant", assistantMessage.Content));
             _currentSession.UpdatedAt = DateTime.Now;
+
+            // Save session after successful message
+            await SaveCurrentSessionAsync();
         }
         catch (OperationCanceledException)
         {
@@ -265,58 +302,56 @@ public partial class MainViewModel : ViewModelBase
 
     private string GetCodeChatSystemPrompt()
     {
-        return $@"You are an AI assistant with access to a workspace directory. You can perform file and command operations by using special action blocks in your responses.
+        return $@"You are an AI coding assistant with access to a workspace directory. You can perform file and command operations using special action blocks.
 
-WORKSPACE PATH: {_currentSession.WorkspacePath}
+WORKSPACE: {_currentSession.WorkspacePath}
 
-Available actions (use these code blocks in your response):
+ACTION SYNTAX - Use these exact formats in your responses:
 
-1. Write/Create a file:
+WRITE FILE (put the ACTUAL content the user wants, not placeholders):
 ```action:write
-file: path/to/file.txt
-Content goes here...
+file: filename.txt
+The actual file content here - use what the user requested!
 ```
 
-2. Read a file:
+READ FILE:
 ```action:read
-file: path/to/file.txt
+file: filename.txt
 ```
 
-3. Delete a file or directory:
+DELETE:
 ```action:delete
 file: path/to/delete
 ```
 
-4. Rename/Move a file:
+RENAME/MOVE:
 ```action:rename
-from: old/path.txt
-to: new/path.txt
+from: oldname.txt
+to: newname.txt
 ```
 
-5. Create a directory:
+CREATE DIRECTORY:
 ```action:mkdir
-file: path/to/directory
+file: foldername
 ```
 
-6. Run a command:
+RUN COMMAND:
 ```action:run
-npm install
+the command here
 ```
 
-7. Run a script:
+RUN SCRIPT:
 ```action:script
 extension: .bat
-echo Hello World
-dir
+script content here
 ```
 
-IMPORTANT RULES:
-- All file paths are relative to the workspace
-- Always explain what you're doing before performing actions
-- After file operations, briefly confirm what was done
-- Be careful with delete operations
-- Commands run in the workspace directory
-- You can use multiple action blocks in one response";
+CRITICAL RULES:
+1. When writing files, use the EXACT content the user requests - never use placeholder text like 'content here'
+2. All paths are relative to the workspace
+3. Explain what you're doing before each action
+4. You can use multiple action blocks in one response
+5. For file content, write exactly what the user asks for";
     }
 
     private async Task ProcessCodeActionsAsync(string response)
@@ -560,6 +595,9 @@ IMPORTANT RULES:
         }
         IsSettingsVisible = false;
         SetStatus(AIStatus.Idle);
+
+        // Persist settings to disk
+        await PersistSettingsAsync();
     }
 
     [RelayCommand]
@@ -592,4 +630,81 @@ IMPORTANT RULES:
     {
         OnPropertyChanged(nameof(CanSendMessage));
     }
+
+    #region Persistence
+
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            var settings = await Task.Run(() => _persistenceService.LoadSettingsAsync());
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (!string.IsNullOrEmpty(settings.ServerUrl))
+                {
+                    ServerUrl = settings.ServerUrl;
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load settings: {ex.Message}");
+        }
+    }
+
+    private async Task LoadSessionsAsync()
+    {
+        try
+        {
+            var sessions = await Task.Run(() => _persistenceService.LoadSessionsAsync());
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                ChatHistory.Clear();
+                foreach (var session in sessions.OrderByDescending(s => s.UpdatedAt))
+                {
+                    ChatHistory.Add(session);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load sessions: {ex.Message}");
+        }
+    }
+
+    private async Task SaveCurrentSessionAsync()
+    {
+        if (!_isInitialized) return;
+
+        try
+        {
+            await Task.Run(() => _persistenceService.SaveSessionAsync(_currentSession));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to save session: {ex.Message}");
+        }
+    }
+
+    private async Task PersistSettingsAsync()
+    {
+        if (!_isInitialized) return;
+
+        try
+        {
+            var settings = new AppSettings
+            {
+                ServerUrl = ServerUrl,
+                LastSelectedModel = SelectedModel,
+                LastSessionId = _currentSession?.Id
+            };
+            await Task.Run(() => _persistenceService.SaveSettingsAsync(settings));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to save settings: {ex.Message}");
+        }
+    }
+
+    #endregion
 }

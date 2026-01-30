@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:GuyOllamaAI.ViewModels"
         xmlns:views="using:GuyOllamaAI.Views"
+        xmlns:md="clr-namespace:Markdown.Avalonia;assembly=Markdown.Avalonia.Tight"
         x:Class="GuyOllamaAI.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="GuyOllamaAI"
@@ -171,15 +172,16 @@
                             <Border Classes="message-card"
                                     Classes.user-message="{Binding IsUser}"
                                     HorizontalAlignment="{Binding HorizontalAlignment}"
-                                    MaxWidth="600"
+                                    MaxWidth="700"
                                     Margin="0,4">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="{Binding Role}"
                                                Classes="caption"
                                                FontWeight="SemiBold" />
-                                    <SelectableTextBlock Text="{Binding Content}"
-                                               Classes="body"
-                                               TextWrapping="Wrap" />
+                                    <md:MarkdownScrollViewer Markdown="{Binding Content}"
+                                                             SaveScrollValueWhenContentUpdated="True"
+                                                             VerticalScrollBarVisibility="Disabled"
+                                                             HorizontalScrollBarVisibility="Disabled" />
                                 </StackPanel>
                             </Border>
                         </DataTemplate>

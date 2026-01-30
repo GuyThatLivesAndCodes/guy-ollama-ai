@@ -4,6 +4,7 @@
              RequestedThemeVariant="Dark">
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://Markdown.Avalonia.Tight/Styles/MarkdownStyle.axaml" />
         <StyleInclude Source="avares://GuyOllamaAI/Styles/AppStyles.axaml" />
     </Application.Styles>
 

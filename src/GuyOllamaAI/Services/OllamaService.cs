@@ -35,7 +35,7 @@ public class OllamaService : IDisposable
     {
         try
         {
-            var response = await _httpClient.GetAsync($"{_baseUrl}/api/tags", cancellationToken);
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/tags", cancellationToken).ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -50,11 +50,11 @@ public class OllamaService : IDisposable
 
         try
         {
-            var response = await _httpClient.GetAsync($"{_baseUrl}/api/tags", cancellationToken);
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/tags", cancellationToken).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
-                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 var json = JsonDocument.Parse(content);
 
                 if (json.RootElement.TryGetProperty("models", out var modelsElement))
@@ -100,16 +100,16 @@ public class OllamaService : IDisposable
         using var response = await _httpClient.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         response.EnsureSuccessStatusCode();
 
-        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var reader = new System.IO.StreamReader(stream);
 
         while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
         {
-            var line = await reader.ReadLineAsync(cancellationToken);
+            var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
 
             if (string.IsNullOrWhiteSpace(line))
                 continue;
