@@ -1,0 +1,105 @@
+name: Build GuyOllamaAI
+
+on:
+  push:
+    branches: [ main, master, 'claude/*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Publish Windows x64
+      run: dotnet publish src/GuyOllamaAI/GuyOllamaAI.csproj -c Release -r win-x64 --self-contained -o ./publish/win-x64
+
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: GuyOllamaAI-Windows-x64
+        path: ./publish/win-x64/
+        retention-days: 30
+
+  # Uncomment the job below to enable Linux builds
+  # build-linux:
+  #   runs-on: ubuntu-latest
+  #
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
+  #
+  #   - name: Setup .NET
+  #     uses: actions/setup-dotnet@v4
+  #     with:
+  #       dotnet-version: '8.0.x'
+  #
+  #   - name: Restore dependencies
+  #     run: dotnet restore
+  #
+  #   - name: Build
+  #     run: dotnet build --configuration Release --no-restore
+  #
+  #   - name: Publish Linux x64
+  #     run: dotnet publish src/GuyOllamaAI/GuyOllamaAI.csproj -c Release -r linux-x64 --self-contained -o ./publish/linux-x64
+  #
+  #   - name: Upload Linux artifact
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: GuyOllamaAI-Linux-x64
+  #       path: ./publish/linux-x64/
+  #       retention-days: 30
+
+  # Uncomment the job below to enable macOS builds
+  # build-macos:
+  #   runs-on: macos-latest
+  #
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
+  #
+  #   - name: Setup .NET
+  #     uses: actions/setup-dotnet@v4
+  #     with:
+  #       dotnet-version: '8.0.x'
+  #
+  #   - name: Restore dependencies
+  #     run: dotnet restore
+  #
+  #   - name: Build
+  #     run: dotnet build --configuration Release --no-restore
+  #
+  #   - name: Publish macOS x64 (Intel)
+  #     run: dotnet publish src/GuyOllamaAI/GuyOllamaAI.csproj -c Release -r osx-x64 --self-contained -o ./publish/osx-x64
+  #
+  #   - name: Publish macOS arm64 (Apple Silicon)
+  #     run: dotnet publish src/GuyOllamaAI/GuyOllamaAI.csproj -c Release -r osx-arm64 --self-contained -o ./publish/osx-arm64
+  #
+  #   - name: Upload macOS Intel artifact
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: GuyOllamaAI-macOS-x64
+  #       path: ./publish/osx-x64/
+  #       retention-days: 30
+  #
+  #   - name: Upload macOS Apple Silicon artifact
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: GuyOllamaAI-macOS-arm64
+  #       path: ./publish/osx-arm64/
+  #       retention-days: 30

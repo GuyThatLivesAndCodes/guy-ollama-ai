@@ -1,0 +1,115 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GuyOllamaAI.ViewModels"
+        x:Class="GuyOllamaAI.Views.SplashWindow"
+        x:DataType="vm:SplashViewModel"
+        Title="GuyOllamaAI"
+        Width="600" Height="450"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        Background="{DynamicResource BackgroundBrush}">
+
+    <Grid RowDefinitions="*, Auto">
+        <!-- Main Content -->
+        <StackPanel Grid.Row="0"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Spacing="24">
+
+            <!-- Logo Animation Container -->
+            <Border Name="LogoContainer"
+                    HorizontalAlignment="Center"
+                    Width="120" Height="120"
+                    CornerRadius="24"
+                    Background="{DynamicResource PrimaryBrush}"
+                    Opacity="{Binding LogoOpacity}">
+                <Border.RenderTransform>
+                    <ScaleTransform ScaleX="{Binding LogoScale}" ScaleY="{Binding LogoScale}" />
+                </Border.RenderTransform>
+                <TextBlock Text="G"
+                           FontSize="64"
+                           FontWeight="Bold"
+                           Foreground="White"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+            </Border>
+
+            <!-- App Name with Animation -->
+            <StackPanel HorizontalAlignment="Center" Spacing="8">
+                <TextBlock Text="GuyOllamaAI"
+                           Classes="title"
+                           HorizontalAlignment="Center"
+                           Opacity="{Binding TitleOpacity}">
+                    <TextBlock.RenderTransform>
+                        <TranslateTransform Y="{Binding TitleOffset}" />
+                    </TextBlock.RenderTransform>
+                </TextBlock>
+
+                <TextBlock Text="Your Local AI Assistant"
+                           Classes="subtitle"
+                           HorizontalAlignment="Center"
+                           Opacity="{Binding SubtitleOpacity}">
+                    <TextBlock.RenderTransform>
+                        <TranslateTransform Y="{Binding SubtitleOffset}" />
+                    </TextBlock.RenderTransform>
+                </TextBlock>
+            </StackPanel>
+
+            <!-- Introduction Text -->
+            <Border Background="{DynamicResource SurfaceBrush}"
+                    CornerRadius="12"
+                    Padding="24,20"
+                    MaxWidth="450"
+                    Opacity="{Binding InfoOpacity}">
+                <Border.RenderTransform>
+                    <TranslateTransform Y="{Binding InfoOffset}" />
+                </Border.RenderTransform>
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Welcome!"
+                               Classes="heading"
+                               HorizontalAlignment="Center" />
+
+                    <TextBlock TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               LineHeight="22"
+                               Foreground="{DynamicResource TextSecondaryBrush}">
+                        <Run Text="GuyOllamaAI connects directly to your local Ollama server." />
+                        <LineBreak />
+                        <LineBreak />
+                        <Run Text="No API keys needed" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}" />
+                        <Run Text=" | " />
+                        <Run Text="No tokens required" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}" />
+                        <Run Text=" | " />
+                        <Run Text="No payment" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}" />
+                        <LineBreak />
+                        <LineBreak />
+                        <Run Text="Everything runs locally on your machine for complete privacy and control." />
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <!-- Continue Button -->
+            <Button Content="Get Started"
+                    Classes="primary"
+                    HorizontalAlignment="Center"
+                    Padding="32,12"
+                    FontSize="16"
+                    Command="{Binding ContinueCommand}"
+                    Opacity="{Binding ButtonOpacity}">
+                <Button.RenderTransform>
+                    <TranslateTransform Y="{Binding ButtonOffset}" />
+                </Button.RenderTransform>
+            </Button>
+        </StackPanel>
+
+        <!-- Version Info -->
+        <TextBlock Grid.Row="1"
+                   Text="Version 1.0.0"
+                   Classes="caption"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,16"
+                   Opacity="{Binding ButtonOpacity}" />
+    </Grid>
+</Window>
