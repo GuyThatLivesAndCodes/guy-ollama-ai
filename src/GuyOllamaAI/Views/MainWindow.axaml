@@ -2,7 +2,6 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:GuyOllamaAI.ViewModels"
         xmlns:views="using:GuyOllamaAI.Views"
-        xmlns:md="clr-namespace:Markdown.Avalonia;assembly=Markdown.Avalonia.Tight"
         x:Class="GuyOllamaAI.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="GuyOllamaAI"
@@ -178,10 +177,9 @@
                                     <TextBlock Text="{Binding Role}"
                                                Classes="caption"
                                                FontWeight="SemiBold" />
-                                    <md:MarkdownScrollViewer Markdown="{Binding Content}"
-                                                             SaveScrollValueWhenContentUpdated="True"
-                                                             VerticalScrollBarVisibility="Disabled"
-                                                             HorizontalScrollBarVisibility="Disabled" />
+                                    <TextBlock Text="{Binding Content}"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
                                 </StackPanel>
                             </Border>
                         </DataTemplate>
