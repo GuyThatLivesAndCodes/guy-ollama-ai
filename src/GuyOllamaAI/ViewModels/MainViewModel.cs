@@ -397,20 +397,31 @@ CRITICAL RULES:
     private async Task ProcessCodeActionsAsync(string response)
     {
         var actions = _actionParser.ParseActions(response);
+        var actionResults = new List<string>();
 
         foreach (var action in actions)
         {
             try
             {
-                await ExecuteCodeActionAsync(action);
+                var result = await ExecuteCodeActionAsync(action);
+                if (!string.IsNullOrEmpty(result))
+                {
+                    actionResults.Add(result);
+                }
             }
             catch (Exception ex)
             {
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    Messages.Add(new ChatMessage("System", $"Action failed: {action.Description}\nError: {ex.Message}"));
-                });
+                var errorMsg = $"Action failed: {action.Description}\nError: {ex.Message}";
+                await AddSystemMessageAsync(errorMsg, addToSession: false);
+                actionResults.Add(errorMsg);
             }
+        }
+
+        // Add all action results to session so AI can see them
+        if (actionResults.Count > 0)
+        {
+            var combinedResults = string.Join("\n\n", actionResults);
+            _currentSession.Messages.Add(new ChatMessage("system", $"[Action Results]\n{combinedResults}"));
         }
 
         // Refresh workspace files after actions
@@ -420,23 +431,26 @@ CRITICAL RULES:
         }
     }
 
-    private async Task ExecuteCodeActionAsync(CodeAction action)
+    private async Task<string> ExecuteCodeActionAsync(CodeAction action)
     {
         var workspace = _currentSession.WorkspacePath!;
+        string resultMessage;
 
         switch (action.Type)
         {
             case CodeActionType.WriteFile:
                 SetStatus(AIStatus.WritingFiles);
                 await _fileService.WriteFileAsync(workspace, action.FilePath, action.Content);
-                await AddSystemMessageAsync($"Created/Updated file: {action.FilePath}");
-                break;
+                resultMessage = $"Created/Updated file: {action.FilePath}";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
 
             case CodeActionType.ReadFile:
                 SetStatus(AIStatus.ReadingFiles);
                 var content = await _fileService.ReadFileAsync(workspace, action.FilePath);
-                await AddSystemMessageAsync($"Read file: {action.FilePath}\n```\n{content}\n```");
-                break;
+                resultMessage = $"Read file: {action.FilePath}\n```\n{content}\n```";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
 
             case CodeActionType.ReadLines:
                 SetStatus(AIStatus.ReadingFiles);
@@ -445,28 +459,32 @@ CRITICAL RULES:
                 var rangeDesc = action.EndLine > 0
                     ? $"lines {action.StartLine}-{action.EndLine}"
                     : $"lines {action.StartLine}-end";
-                await AddSystemMessageAsync($"Read {rangeDesc} from: {action.FilePath}\n```\n{linesContent}\n```");
-                break;
+                resultMessage = $"Read {rangeDesc} from: {action.FilePath}\n```\n{linesContent}\n```";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
 
             case CodeActionType.AppendFile:
                 SetStatus(AIStatus.WritingFiles);
                 await _fileService.AppendFileAsync(workspace, action.FilePath, action.Content);
-                await AddSystemMessageAsync($"Appended to file: {action.FilePath}");
-                break;
+                resultMessage = $"Appended to file: {action.FilePath}";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
 
             case CodeActionType.ReplaceInFile:
                 SetStatus(AIStatus.WritingFiles);
                 await _fileService.ReplaceInFileAsync(
                     workspace, action.FilePath, action.SearchText, action.ReplaceText);
-                await AddSystemMessageAsync($"Replaced text in file: {action.FilePath}");
-                break;
+                resultMessage = $"Replaced text in file: {action.FilePath}";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
 
             case CodeActionType.InsertAtLine:
                 SetStatus(AIStatus.WritingFiles);
                 await _fileService.InsertAtLineAsync(
                     workspace, action.FilePath, action.StartLine, action.Content);
-                await AddSystemMessageAsync($"Inserted content at line {action.StartLine} in: {action.FilePath}");
-                break;
+                resultMessage = $"Inserted content at line {action.StartLine} in: {action.FilePath}";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
 
             case CodeActionType.Delete:
                 SetStatus(AIStatus.WritingFiles);
@@ -475,43 +493,56 @@ CRITICAL RULES:
                     _fileService.DeleteDirectory(workspace, action.FilePath);
                 else
                     _fileService.DeleteFile(workspace, action.FilePath);
-                await AddSystemMessageAsync($"Deleted: {action.FilePath}");
-                break;
+                resultMessage = $"Deleted: {action.FilePath}";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
 
             case CodeActionType.Rename:
                 SetStatus(AIStatus.WritingFiles);
                 _fileService.Rename(workspace, action.FilePath, action.DestinationPath);
-                await AddSystemMessageAsync($"Renamed: {action.FilePath} -> {action.DestinationPath}");
-                break;
+                resultMessage = $"Renamed: {action.FilePath} -> {action.DestinationPath}";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
 
             case CodeActionType.CreateDirectory:
                 SetStatus(AIStatus.WritingFiles);
                 _fileService.CreateDirectory(workspace, action.FilePath);
-                await AddSystemMessageAsync($"Created directory: {action.FilePath}");
-                break;
+                resultMessage = $"Created directory: {action.FilePath}";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
 
             case CodeActionType.RunCommand:
                 SetStatus(AIStatus.ExecutingCommand);
                 var cmdResult = await _commandService.ExecuteAsync(action.Command, workspace);
-                await AddSystemMessageAsync($"Command: {action.Command}\nExit code: {cmdResult.ExitCode}\n```\n{cmdResult.FullOutput}\n```");
-                break;
+                resultMessage = $"Command: {action.Command}\nExit code: {cmdResult.ExitCode}\n```\n{cmdResult.FullOutput}\n```";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
 
             case CodeActionType.RunScript:
                 SetStatus(AIStatus.ExecutingCommand);
                 var scriptResult = await _commandService.ExecuteScriptAsync(
                     action.Content, workspace, action.ScriptExtension);
-                await AddSystemMessageAsync($"Script executed\nExit code: {scriptResult.ExitCode}\n```\n{scriptResult.FullOutput}\n```");
-                break;
+                resultMessage = $"Script executed\nExit code: {scriptResult.ExitCode}\n```\n{scriptResult.FullOutput}\n```";
+                await AddSystemMessageAsync(resultMessage, addToSession: false);
+                return resultMessage;
+
+            default:
+                return string.Empty;
         }
     }
 
-    private async Task AddSystemMessageAsync(string message)
+    private async Task AddSystemMessageAsync(string message, bool addToSession = true)
     {
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             Messages.Add(new ChatMessage("System", message));
             RequestScrollToBottom();
         });
+
+        if (addToSession)
+        {
+            _currentSession.Messages.Add(new ChatMessage("system", message));
+        }
     }
 
     private void RequestScrollToBottom()

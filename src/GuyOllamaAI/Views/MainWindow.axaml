@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:GuyOllamaAI.ViewModels"
         xmlns:views="using:GuyOllamaAI.Views"
+        xmlns:controls="using:GuyOllamaAI.Controls"
         x:Class="GuyOllamaAI.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="GuyOllamaAI"
@@ -177,9 +178,10 @@
                                     <TextBlock Text="{Binding Role}"
                                                Classes="caption"
                                                FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Content}"
-                                               TextWrapping="Wrap"
-                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <controls:SimpleMarkdownTextBlock
+                                        Markdown="{Binding Content}"
+                                        TextBrush="{DynamicResource TextPrimaryBrush}"
+                                        CodeBackground="{DynamicResource CardBrush}" />
                                 </StackPanel>
                             </Border>
                         </DataTemplate>
