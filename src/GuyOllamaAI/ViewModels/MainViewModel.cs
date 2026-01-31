@@ -24,6 +24,11 @@ public partial class MainViewModel : ViewModelBase
     private readonly ChatPersistenceService _persistenceService = new();
     private bool _isInitialized;
 
+    /// <summary>
+    /// Event raised when UI should scroll to bottom
+    /// </summary>
+    public event EventHandler? ScrollToBottomRequested;
+
     [ObservableProperty]
     private ObservableCollection<ChatMessage> _messages = new();
 
@@ -232,6 +237,7 @@ public partial class MainViewModel : ViewModelBase
                         {
                             Messages[index] = assistantMessage;
                         }
+                        RequestScrollToBottom();
                     });
                     lastUpdateTime = now;
                 }
@@ -319,6 +325,39 @@ READ FILE:
 file: filename.txt
 ```
 
+READ LINES (read specific lines from a file):
+```action:readlines
+file: filename.txt
+lines: 5-15
+```
+Or use start:/end: format:
+```action:readlines
+file: filename.txt
+start: 5
+end: 15
+```
+
+APPEND TO FILE (add content to end of file):
+```action:append
+file: filename.txt
+Content to append at the end
+```
+
+REPLACE IN FILE (find and replace text):
+```action:replace
+file: filename.txt
+search: old text to find
+replace: new text to use
+```
+
+INSERT AT LINE (insert content at specific line number):
+```action:insert
+file: filename.txt
+line: 10
+Content to insert at line 10
+This can be multiple lines
+```
+
 DELETE:
 ```action:delete
 file: path/to/delete
@@ -351,7 +390,8 @@ CRITICAL RULES:
 2. All paths are relative to the workspace
 3. Explain what you're doing before each action
 4. You can use multiple action blocks in one response
-5. For file content, write exactly what the user asks for";
+5. For file content, write exactly what the user asks for
+6. Use APPEND for adding to files, REPLACE for substitutions, INSERT for adding at specific lines";
     }
 
     private async Task ProcessCodeActionsAsync(string response)
@@ -398,6 +438,36 @@ CRITICAL RULES:
                 await AddSystemMessageAsync($"Read file: {action.FilePath}\n```\n{content}\n```");
                 break;
 
+            case CodeActionType.ReadLines:
+                SetStatus(AIStatus.ReadingFiles);
+                var linesContent = await _fileService.ReadLinesAsync(
+                    workspace, action.FilePath, action.StartLine, action.EndLine);
+                var rangeDesc = action.EndLine > 0
+                    ? $"lines {action.StartLine}-{action.EndLine}"
+                    : $"lines {action.StartLine}-end";
+                await AddSystemMessageAsync($"Read {rangeDesc} from: {action.FilePath}\n```\n{linesContent}\n```");
+                break;
+
+            case CodeActionType.AppendFile:
+                SetStatus(AIStatus.WritingFiles);
+                await _fileService.AppendFileAsync(workspace, action.FilePath, action.Content);
+                await AddSystemMessageAsync($"Appended to file: {action.FilePath}");
+                break;
+
+            case CodeActionType.ReplaceInFile:
+                SetStatus(AIStatus.WritingFiles);
+                await _fileService.ReplaceInFileAsync(
+                    workspace, action.FilePath, action.SearchText, action.ReplaceText);
+                await AddSystemMessageAsync($"Replaced text in file: {action.FilePath}");
+                break;
+
+            case CodeActionType.InsertAtLine:
+                SetStatus(AIStatus.WritingFiles);
+                await _fileService.InsertAtLineAsync(
+                    workspace, action.FilePath, action.StartLine, action.Content);
+                await AddSystemMessageAsync($"Inserted content at line {action.StartLine} in: {action.FilePath}");
+                break;
+
             case CodeActionType.Delete:
                 SetStatus(AIStatus.WritingFiles);
                 var info = _fileService.GetInfo(workspace, action.FilePath);
@@ -440,7 +510,13 @@ CRITICAL RULES:
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             Messages.Add(new ChatMessage("System", message));
+            RequestScrollToBottom();
         });
+    }
+
+    private void RequestScrollToBottom()
+    {
+        ScrollToBottomRequested?.Invoke(this, EventArgs.Empty);
     }
 
     [RelayCommand]

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace GuyOllamaAI.Services;
@@ -60,6 +61,81 @@ public class FileOperationService
         }
 
         await File.AppendAllTextAsync(fullPath, content);
+    }
+
+    public async Task<string> ReadLinesAsync(string workspacePath, string relativePath, int startLine, int endLine)
+    {
+        var fullPath = ValidatePath(workspacePath, relativePath);
+
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException($"File not found: {relativePath}");
+        }
+
+        var lines = await File.ReadAllLinesAsync(fullPath);
+        var totalLines = lines.Length;
+
+        // Adjust 1-based line numbers to 0-based index
+        var start = Math.Max(0, startLine - 1);
+        var end = endLine <= 0 ? totalLines : Math.Min(endLine, totalLines);
+
+        if (start >= totalLines)
+        {
+            return $"(File has only {totalLines} lines)";
+        }
+
+        var selectedLines = lines.Skip(start).Take(end - start);
+        var result = new System.Text.StringBuilder();
+        var lineNum = start + 1;
+
+        foreach (var line in selectedLines)
+        {
+            result.AppendLine($"{lineNum,4}: {line}");
+            lineNum++;
+        }
+
+        return result.ToString();
+    }
+
+    public async Task ReplaceInFileAsync(string workspacePath, string relativePath, string searchText, string replaceText)
+    {
+        var fullPath = ValidatePath(workspacePath, relativePath);
+
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException($"File not found: {relativePath}");
+        }
+
+        var content = await File.ReadAllTextAsync(fullPath);
+        var newContent = content.Replace(searchText, replaceText);
+
+        if (content == newContent)
+        {
+            throw new InvalidOperationException($"Search text not found in file: {relativePath}");
+        }
+
+        await File.WriteAllTextAsync(fullPath, newContent);
+    }
+
+    public async Task InsertAtLineAsync(string workspacePath, string relativePath, int lineNumber, string content)
+    {
+        var fullPath = ValidatePath(workspacePath, relativePath);
+
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException($"File not found: {relativePath}");
+        }
+
+        var lines = (await File.ReadAllLinesAsync(fullPath)).ToList();
+
+        // Adjust to 0-based index and clamp
+        var insertIndex = Math.Max(0, Math.Min(lineNumber - 1, lines.Count));
+
+        // Split content into lines and insert
+        var contentLines = content.Split('\n');
+        lines.InsertRange(insertIndex, contentLines);
+
+        await File.WriteAllLinesAsync(fullPath, lines);
     }
 
     public void CreateDirectory(string workspacePath, string relativePath)

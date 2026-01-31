@@ -43,6 +43,10 @@ public class CodeActionParser
         {
             "write" or "create" => ParseWriteAction(content),
             "read" => ParseReadAction(content),
+            "readlines" => ParseReadLinesAction(content),
+            "append" => ParseAppendAction(content),
+            "replace" => ParseReplaceAction(content),
+            "insert" => ParseInsertAction(content),
             "delete" => ParseDeleteAction(content),
             "rename" or "move" => ParseRenameAction(content),
             "mkdir" or "createdir" => ParseMkdirAction(content),
@@ -161,6 +165,153 @@ public class CodeActionParser
         };
     }
 
+    private CodeAction ParseAppendAction(string content)
+    {
+        var lines = content.Split('\n', 2);
+        var fileMatch = FilePathPattern.Match(lines[0]);
+
+        return new CodeAction
+        {
+            Type = CodeActionType.AppendFile,
+            FilePath = fileMatch.Success ? fileMatch.Groups[1].Value.Trim() : lines[0].Trim(),
+            Content = lines.Length > 1 ? lines[1].TrimStart('\n') : string.Empty
+        };
+    }
+
+    private CodeAction ParseReplaceAction(string content)
+    {
+        var lines = content.Trim().Split('\n');
+        var filePath = "";
+        var searchText = "";
+        var replaceText = "";
+        var inSearch = false;
+        var inReplace = false;
+        var searchLines = new List<string>();
+        var replaceLines = new List<string>();
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            {
+                filePath = line.Substring(5).Trim();
+                inSearch = false;
+                inReplace = false;
+            }
+            else if (line.StartsWith("search:", StringComparison.OrdinalIgnoreCase))
+            {
+                var searchValue = line.Substring(7).Trim();
+                if (!string.IsNullOrEmpty(searchValue))
+                    searchLines.Add(searchValue);
+                inSearch = true;
+                inReplace = false;
+            }
+            else if (line.StartsWith("replace:", StringComparison.OrdinalIgnoreCase))
+            {
+                var replaceValue = line.Substring(8).Trim();
+                if (!string.IsNullOrEmpty(replaceValue))
+                    replaceLines.Add(replaceValue);
+                inSearch = false;
+                inReplace = true;
+            }
+            else if (inSearch)
+            {
+                searchLines.Add(line);
+            }
+            else if (inReplace)
+            {
+                replaceLines.Add(line);
+            }
+        }
+
+        searchText = string.Join("\n", searchLines);
+        replaceText = string.Join("\n", replaceLines);
+
+        return new CodeAction
+        {
+            Type = CodeActionType.ReplaceInFile,
+            FilePath = filePath,
+            SearchText = searchText,
+            ReplaceText = replaceText
+        };
+    }
+
+    private CodeAction ParseInsertAction(string content)
+    {
+        var lines = content.Trim().Split('\n');
+        var filePath = "";
+        var lineNumber = 0;
+        var contentLines = new List<string>();
+        var inContent = false;
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            {
+                filePath = line.Substring(5).Trim();
+            }
+            else if (line.StartsWith("line:", StringComparison.OrdinalIgnoreCase))
+            {
+                int.TryParse(line.Substring(5).Trim(), out lineNumber);
+                inContent = true;
+            }
+            else if (inContent)
+            {
+                contentLines.Add(line);
+            }
+        }
+
+        return new CodeAction
+        {
+            Type = CodeActionType.InsertAtLine,
+            FilePath = filePath,
+            StartLine = lineNumber,
+            Content = string.Join("\n", contentLines)
+        };
+    }
+
+    private CodeAction ParseReadLinesAction(string content)
+    {
+        var lines = content.Trim().Split('\n');
+        var filePath = "";
+        var startLine = 1;
+        var endLine = -1; // -1 means to end of file
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            {
+                filePath = line.Substring(5).Trim();
+            }
+            else if (line.StartsWith("start:", StringComparison.OrdinalIgnoreCase))
+            {
+                int.TryParse(line.Substring(6).Trim(), out startLine);
+            }
+            else if (line.StartsWith("end:", StringComparison.OrdinalIgnoreCase))
+            {
+                int.TryParse(line.Substring(4).Trim(), out endLine);
+            }
+            else if (line.StartsWith("lines:", StringComparison.OrdinalIgnoreCase))
+            {
+                // Support "lines: 5-10" format
+                var range = line.Substring(6).Trim();
+                var parts = range.Split('-');
+                if (parts.Length == 2)
+                {
+                    int.TryParse(parts[0].Trim(), out startLine);
+                    int.TryParse(parts[1].Trim(), out endLine);
+                }
+            }
+        }
+
+        return new CodeAction
+        {
+            Type = CodeActionType.ReadLines,
+            FilePath = filePath,
+            StartLine = startLine,
+            EndLine = endLine
+        };
+    }
+
     public string RemoveActionBlocks(string response)
     {
         return ActionBlockPattern.Replace(response, "").Trim();
@@ -171,6 +322,10 @@ public enum CodeActionType
 {
     WriteFile,
     ReadFile,
+    ReadLines,
+    AppendFile,
+    ReplaceInFile,
+    InsertAtLine,
     Delete,
     Rename,
     CreateDirectory,
@@ -188,10 +343,22 @@ public class CodeAction
     public string ScriptExtension { get; set; } = ".sh";
     public string RawBlock { get; set; } = string.Empty;
 
+    // For replace operations
+    public string SearchText { get; set; } = string.Empty;
+    public string ReplaceText { get; set; } = string.Empty;
+
+    // For line-based operations
+    public int StartLine { get; set; }
+    public int EndLine { get; set; }
+
     public string Description => Type switch
     {
         CodeActionType.WriteFile => $"Write file: {FilePath}",
         CodeActionType.ReadFile => $"Read file: {FilePath}",
+        CodeActionType.ReadLines => $"Read lines {StartLine}-{EndLine} from: {FilePath}",
+        CodeActionType.AppendFile => $"Append to file: {FilePath}",
+        CodeActionType.ReplaceInFile => $"Replace in file: {FilePath}",
+        CodeActionType.InsertAtLine => $"Insert at line {StartLine} in: {FilePath}",
         CodeActionType.Delete => $"Delete: {FilePath}",
         CodeActionType.Rename => $"Rename: {FilePath} -> {DestinationPath}",
         CodeActionType.CreateDirectory => $"Create directory: {FilePath}",
